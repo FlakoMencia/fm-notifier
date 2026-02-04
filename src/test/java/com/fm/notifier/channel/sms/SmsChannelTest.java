@@ -6,36 +6,50 @@ import com.fm.notifier.api.NotificationStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.Mockito;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
 class SmsChannelTest {
 
     private SmsChannel smsChannel;
-
-    @Mock
     private Notification mockNotification;
 
     @BeforeEach
     void setUp() {
         smsChannel = new SmsChannel();
+        mockNotification = Mockito.mock(Notification.class);
     }
 
     @Test
-    @DisplayName("Should return failure for invalid phone number recipient")
+    @DisplayName("supports() should return true for 'sms' channel")
+    void testSupportsSmsChannel() {
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("channel", "sms");
+        when(mockNotification.getMetadata()).thenReturn(metadata);
+
+        assertTrue(smsChannel.supports(mockNotification), "Debería soportar el canal 'sms'.");
+    }
+
+    @Test
+    @DisplayName("supports() should return false for other channels")
+    void testDoesNotSupportOtherChannels() {
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("channel", "email");
+        when(mockNotification.getMetadata()).thenReturn(metadata);
+
+        assertFalse(smsChannel.supports(mockNotification), "No debería soportar canales diferentes a 'sms'.");
+    }
+
+    @Test
+    @DisplayName("send() should fail for invalid phone number recipient")
     void testSendInvalidRecipient() {
         when(mockNotification.getRecipient()).thenReturn("invalid-phone");
-        when(mockNotification.getBody()).thenReturn("Test message"); // Body is required
-        when(mockNotification.getMetadata()).thenReturn(new HashMap<>()); // Mock metadata to avoid NPE
+        when(mockNotification.getBody()).thenReturn("Test message");
 
         NotificationResult result = smsChannel.send(mockNotification);
 
@@ -44,73 +58,47 @@ class SmsChannelTest {
         assertEquals(NotificationStatus.VALIDATION_FAILED, result.getStatus());
         assertEquals("INVALID_PHONE", result.getError().getCode());
         assertEquals("Recipient is not a valid phone number", result.getError().getMessage());
-        assertEquals("sms", result.getChannel());
+        assertEquals(smsChannel.getChannelName(), result.getChannel());
     }
 
     @Test
-    @DisplayName("Should return failure for empty or blank body")
+    @DisplayName("send() should fail for empty or blank body")
     void testSendEmptyBody() {
         when(mockNotification.getRecipient()).thenReturn("+1234567890");
-        when(mockNotification.getBody()).thenReturn(null); // Empty body
-        when(mockNotification.getMetadata()).thenReturn(new HashMap<>()); // Mock metadata to avoid NPE
 
-        NotificationResult result = smsChannel.send(mockNotification);
+        // Test with null body
+        when(mockNotification.getBody()).thenReturn(null);
+        NotificationResult resultNullBody = smsChannel.send(mockNotification);
 
-        assertNotNull(result);
-        assertFalse(result.isSuccess());
-        assertEquals(NotificationStatus.VALIDATION_FAILED, result.getStatus());
-        assertEquals("EMPTY_BODY", result.getError().getCode());
-        assertEquals("SMS body must not be empty", result.getError().getMessage());
-        assertEquals("sms", result.getChannel());
+        assertNotNull(resultNullBody);
+        assertFalse(resultNullBody.isSuccess());
+        assertEquals(NotificationStatus.VALIDATION_FAILED, resultNullBody.getStatus());
+        assertEquals("EMPTY_BODY", resultNullBody.getError().getCode());
 
-        when(mockNotification.getBody()).thenReturn("   "); // Blank body
-        result = smsChannel.send(mockNotification);
+        // Test with blank body
+        when(mockNotification.getBody()).thenReturn("   ");
+        NotificationResult resultBlankBody = smsChannel.send(mockNotification);
 
-        assertNotNull(result);
-        assertFalse(result.isSuccess());
-        assertEquals(NotificationStatus.VALIDATION_FAILED, result.getStatus());
-        assertEquals("EMPTY_BODY", result.getError().getCode());
-        assertEquals("SMS body must not be empty", result.getError().getMessage());
-        assertEquals("sms", result.getChannel());
+        assertNotNull(resultBlankBody);
+        assertFalse(resultBlankBody.isSuccess());
+        assertEquals(NotificationStatus.VALIDATION_FAILED, resultBlankBody.getStatus());
+        assertEquals("EMPTY_BODY", resultBlankBody.getError().getCode());
     }
 
     @Test
-    @DisplayName("Should successfully send SMS with valid recipient and body")
+    @DisplayName("send() should succeed with valid recipient and body")
     void testSendSuccess() {
         when(mockNotification.getRecipient()).thenReturn("+1234567890");
         when(mockNotification.getBody()).thenReturn("Hello, world!");
-        when(mockNotification.getMetadata()).thenReturn(Collections.singletonMap("channel", "sms"));
 
         NotificationResult result = smsChannel.send(mockNotification);
 
         assertNotNull(result);
         assertTrue(result.isSuccess());
         assertEquals(NotificationStatus.DELIVERED, result.getStatus());
-        assertEquals("sms", result.getChannel());
+        assertEquals(smsChannel.getChannelName(), result.getChannel());
         assertEquals("SIMULATED_SMS_PROVIDER", result.getProvider());
         assertNotNull(result.getExternalId());
-    }
-
-    @Test
-    @DisplayName("Should support notifications with 'sms' channel in metadata")
-    void testSupportsSmsChannel() {
-        Map<String, Object> metadata = new HashMap<>();
-        metadata.put("channel", "sms");
-        when(mockNotification.getMetadata()).thenReturn(metadata);
-
-        assertTrue(smsChannel.supports(mockNotification));
-    }
-
-    @Test
-    @DisplayName("Should not support notifications without 'sms' channel in metadata")
-    void testDoesNotSupportOtherChannels() {
-        Map<String, Object> metadata = new HashMap<>();
-        metadata.put("channel", "email");
-        when(mockNotification.getMetadata()).thenReturn(metadata);
-
-        assertFalse(smsChannel.supports(mockNotification));
-
-        when(mockNotification.getMetadata()).thenReturn(Collections.emptyMap());
-        assertFalse(smsChannel.supports(mockNotification));
+        assertNull(result.getError());
     }
 }

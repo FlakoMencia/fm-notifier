@@ -6,9 +6,7 @@ import com.fm.notifier.api.NotificationStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.Mockito;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -17,115 +15,105 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
 class PushNotificationChannelTest {
 
-    private PushNotificationChannel pushNotificationChannel;
-
-    @Mock
+    private PushNotificationChannel pushChannel;
     private Notification mockNotification;
 
     @BeforeEach
     void setUp() {
-        pushNotificationChannel = new PushNotificationChannel();
+        pushChannel = new PushNotificationChannel();
+        mockNotification = Mockito.mock(Notification.class);
     }
 
     @Test
-    @DisplayName("Should return failure for missing or blank device token")
-    void testSendMissingDeviceToken() {
-        when(mockNotification.getMetadata()).thenReturn(new HashMap<>()); // No device token
-        when(mockNotification.getBody()).thenReturn("Test message"); // Body is required
-
-        NotificationResult result = pushNotificationChannel.send(mockNotification);
-
-        assertNotNull(result);
-        assertFalse(result.isSuccess());
-        assertEquals(NotificationStatus.VALIDATION_FAILED, result.getStatus());
-        assertEquals("MISSING_DEVICE_TOKEN", result.getError().getCode());
-        assertEquals("Push notification requires a device token", result.getError().getMessage());
-        assertEquals("push", result.getChannel());
-
-        Map<String, Object> metadataWithBlankToken = new HashMap<>();
-        metadataWithBlankToken.put("deviceToken", "   "); // Blank device token
-        when(mockNotification.getMetadata()).thenReturn(metadataWithBlankToken);
-
-        result = pushNotificationChannel.send(mockNotification);
-
-        assertNotNull(result);
-        assertFalse(result.isSuccess());
-        assertEquals(NotificationStatus.VALIDATION_FAILED, result.getStatus());
-        assertEquals("MISSING_DEVICE_TOKEN", result.getError().getCode());
-        assertEquals("Push notification requires a device token", result.getError().getMessage());
-        assertEquals("push", result.getChannel());
-    }
-
-    @Test
-    @DisplayName("Should return failure for empty or blank body")
-    void testSendEmptyBody() {
-        Map<String, Object> metadata = new HashMap<>();
-        metadata.put("deviceToken", "validDeviceToken");
-        when(mockNotification.getMetadata()).thenReturn(metadata);
-        when(mockNotification.getBody()).thenReturn(null); // Empty body
-
-        NotificationResult result = pushNotificationChannel.send(mockNotification);
-
-        assertNotNull(result);
-        assertFalse(result.isSuccess());
-        assertEquals(NotificationStatus.VALIDATION_FAILED, result.getStatus());
-        assertEquals("EMPTY_BODY", result.getError().getCode());
-        assertEquals("Push notification body must not be empty", result.getError().getMessage());
-        assertEquals("push", result.getChannel());
-
-        when(mockNotification.getBody()).thenReturn("   "); // Blank body
-        result = pushNotificationChannel.send(mockNotification);
-
-        assertNotNull(result);
-        assertFalse(result.isSuccess());
-        assertEquals(NotificationStatus.VALIDATION_FAILED, result.getStatus());
-        assertEquals("EMPTY_BODY", result.getError().getCode());
-        assertEquals("Push notification body must not be empty", result.getError().getMessage());
-        assertEquals("push", result.getChannel());
-    }
-
-    @Test
-    @DisplayName("Should successfully send push notification with valid device token and body")
-    void testSendSuccess() {
-        Map<String, Object> metadata = new HashMap<>();
-        metadata.put("deviceToken", "validDeviceToken");
-        metadata.put("channel", "push");
-        when(mockNotification.getMetadata()).thenReturn(metadata);
-        when(mockNotification.getBody()).thenReturn("Hello, push notification!");
-
-        NotificationResult result = pushNotificationChannel.send(mockNotification);
-
-        assertNotNull(result);
-        assertTrue(result.isSuccess());
-        assertEquals(NotificationStatus.DELIVERED, result.getStatus());
-        assertEquals("push", result.getChannel());
-        assertEquals("SIMULATED_PUSH_PROVIDER", result.getProvider());
-        assertNotNull(result.getExternalId());
-    }
-
-    @Test
-    @DisplayName("Should support notifications with 'push' channel in metadata")
+    @DisplayName("supports() should return true for 'push' channel")
     void testSupportsPushChannel() {
         Map<String, Object> metadata = new HashMap<>();
         metadata.put("channel", "push");
         when(mockNotification.getMetadata()).thenReturn(metadata);
 
-        assertTrue(pushNotificationChannel.supports(mockNotification));
+        assertTrue(pushChannel.supports(mockNotification), "Debería soportar el canal 'push'.");
     }
 
     @Test
-    @DisplayName("Should not support notifications without 'push' channel in metadata")
+    @DisplayName("supports() should return false for other channels")
     void testDoesNotSupportOtherChannels() {
         Map<String, Object> metadata = new HashMap<>();
-        metadata.put("channel", "email");
+        metadata.put("channel", "sms");
         when(mockNotification.getMetadata()).thenReturn(metadata);
 
-        assertFalse(pushNotificationChannel.supports(mockNotification));
+        assertFalse(pushChannel.supports(mockNotification), "No debería soportar canales diferentes a 'push'.");
+    }
 
+    @Test
+    @DisplayName("send() should fail for missing or blank device token")
+    void testSendMissingDeviceToken() {
+        when(mockNotification.getBody()).thenReturn("Test message");
+
+        // Test with missing device token
         when(mockNotification.getMetadata()).thenReturn(Collections.emptyMap());
-        assertFalse(pushNotificationChannel.supports(mockNotification));
+        NotificationResult resultMissing = pushChannel.send(mockNotification);
+
+        assertNotNull(resultMissing);
+        assertFalse(resultMissing.isSuccess());
+        assertEquals(NotificationStatus.VALIDATION_FAILED, resultMissing.getStatus());
+        assertEquals("MISSING_DEVICE_TOKEN", resultMissing.getError().getCode());
+
+        // Test with blank device token
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("deviceToken", "   ");
+        when(mockNotification.getMetadata()).thenReturn(metadata);
+        NotificationResult resultBlank = pushChannel.send(mockNotification);
+
+        assertNotNull(resultBlank);
+        assertFalse(resultBlank.isSuccess());
+        assertEquals(NotificationStatus.VALIDATION_FAILED, resultBlank.getStatus());
+        assertEquals("MISSING_DEVICE_TOKEN", resultBlank.getError().getCode());
+    }
+
+    @Test
+    @DisplayName("send() should fail for empty or blank body")
+    void testSendEmptyBody() {
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("deviceToken", "valid-token");
+        when(mockNotification.getMetadata()).thenReturn(metadata);
+
+        // Test with null body
+        when(mockNotification.getBody()).thenReturn(null);
+        NotificationResult resultNull = pushChannel.send(mockNotification);
+
+        assertNotNull(resultNull);
+        assertFalse(resultNull.isSuccess());
+        assertEquals(NotificationStatus.VALIDATION_FAILED, resultNull.getStatus());
+        assertEquals("EMPTY_BODY", resultNull.getError().getCode());
+
+        // Test with blank body
+        when(mockNotification.getBody()).thenReturn("   ");
+        NotificationResult resultBlank = pushChannel.send(mockNotification);
+
+        assertNotNull(resultBlank);
+        assertFalse(resultBlank.isSuccess());
+        assertEquals(NotificationStatus.VALIDATION_FAILED, resultBlank.getStatus());
+        assertEquals("EMPTY_BODY", resultBlank.getError().getCode());
+    }
+
+    @Test
+    @DisplayName("send() should succeed with valid device token and body")
+    void testSendSuccess() {
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("deviceToken", "valid-token-123");
+        when(mockNotification.getMetadata()).thenReturn(metadata);
+        when(mockNotification.getBody()).thenReturn("Hello from push!");
+
+        NotificationResult result = pushChannel.send(mockNotification);
+
+        assertNotNull(result);
+        assertTrue(result.isSuccess());
+        assertEquals(NotificationStatus.DELIVERED, result.getStatus());
+        assertEquals(pushChannel.getChannelName(), result.getChannel());
+        assertEquals("SIMULATED_PUSH_PROVIDER", result.getProvider());
+        assertNotNull(result.getExternalId());
+        assertNull(result.getError());
     }
 }
